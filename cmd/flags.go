@@ -175,8 +175,8 @@ func urlFlag(cmd *cobra.Command) *cobra.Command {
 }
 
 func strategyFlag(cmd *cobra.Command) *cobra.Command {
-	cmd.Flags().StringP(flagMaxTxSize, "s", "2", "maximum size (in MB) of the messages in a relay transaction")
-	cmd.Flags().StringP(flagMaxMsgLength, "l", "5", "maximum number of messages in a relay transaction")
+	cmd.Flags().Uint64P(flagMaxTxSize, "s", 2*MB, "maximum size (in bytes) of the messages in a relay transaction")
+	cmd.Flags().Uint64P(flagMaxMsgLength, "l", 251, "maximum number of messages in a relay transaction")
 	if err := viper.BindPFlag(flagMaxTxSize, cmd.Flags().Lookup(flagMaxTxSize)); err != nil {
 		panic(err)
 	}

@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"strconv"
-
 	"github.com/iqlusioninc/relayer/relayer"
 	"github.com/spf13/cobra"
 )
@@ -18,31 +16,19 @@ func GetStrategyWithOptions(cmd *cobra.Command, strategy relayer.Strategy) (rela
 
 		}
 
-		maxTxSize, err := cmd.Flags().GetString(flagMaxTxSize)
+		maxTxSize, err := cmd.Flags().GetUint64(flagMaxTxSize)
 		if err != nil {
 			return ns, err
 		}
 
-		txSize, err := strconv.ParseUint(maxTxSize, 10, 64)
+		ns.MaxTxSize = maxTxSize
+
+		maxMsgLength, err := cmd.Flags().GetUint64(flagMaxMsgLength)
 		if err != nil {
 			return ns, err
 		}
 
-		// set max size of messages in a relay transaction
-		ns.MaxTxSize = txSize * MB // in MB
-
-		maxMsgLength, err := cmd.Flags().GetString(flagMaxMsgLength)
-		if err != nil {
-			return ns, err
-		}
-
-		msgLen, err := strconv.ParseUint(maxMsgLength, 10, 64)
-		if err != nil {
-			return ns, err
-		}
-
-		// set max length messages in relay transaction
-		ns.MaxMsgLength = msgLen
+		ns.MaxMsgLength = maxMsgLength
 
 		return ns, nil
 	default:
