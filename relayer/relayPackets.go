@@ -3,7 +3,7 @@ package relayer
 import (
 	"fmt"
 
-	retry "github.com/avast/retry-go"
+	"github.com/avast/retry-go"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	chanTypes "github.com/cosmos/cosmos-sdk/x/ibc/04-channel/types"
 )
@@ -14,6 +14,7 @@ type relayPacket interface {
 	Data() []byte
 	Seq() uint64
 	Timeout() uint64
+	Type() string
 }
 
 type relayMsgTimeout struct {
@@ -24,6 +25,10 @@ type relayMsgTimeout struct {
 	dstRecvRes   *chanTypes.RecvResponse
 
 	pass bool
+}
+
+func (rp *relayMsgTimeout) Type() string {
+	return "timeout"
 }
 
 func (rp *relayMsgTimeout) Data() []byte {
@@ -97,6 +102,10 @@ func (rp *relayMsgRecvPacket) timeoutPacket() *relayMsgTimeout {
 	}
 }
 
+func (rp *relayMsgRecvPacket) Type() string {
+	return "recv_packet"
+}
+
 func (rp *relayMsgRecvPacket) Data() []byte {
 	return rp.packetData
 }
@@ -150,12 +159,18 @@ type relayMsgPacketAck struct {
 	pass bool
 }
 
+func (rp *relayMsgPacketAck) Type() string {
+	return "packet_ack"
+}
+
 func (rp *relayMsgPacketAck) Data() []byte {
 	return rp.packetData
 }
+
 func (rp *relayMsgPacketAck) Seq() uint64 {
 	return rp.seq
 }
+
 func (rp *relayMsgPacketAck) Timeout() uint64 {
 	return rp.timeout
 }

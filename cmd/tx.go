@@ -190,6 +190,13 @@ func relayMsgsCmd() *cobra.Command {
 				return err
 			}
 
+			maxPacketLength, err := cmd.Flags().GetUint64(flagMaxMsgLength)
+			if err != nil {
+				return err
+			}
+
+			maxPacketLength = maxPacketLength - 1
+
 			sh, err := relayer.NewSyncHeaders(c[src], c[dst])
 			if err != nil {
 				return err
@@ -200,17 +207,20 @@ func relayMsgsCmd() *cobra.Command {
 				return err
 			}
 
+			if len(sp.Src) > int(maxPacketLength) {
+				sp.Src = sp.Src[:maxPacketLength]
+			}
+			if len(sp.Dst) > int(maxPacketLength) {
+				sp.Dst = sp.Dst[:maxPacketLength]
+			}
+
 			path := config.Paths.MustGet(args[0])
 			strategy, err := GetStrategyWithOptions(cmd, path.MustGetStrategy())
 			if err != nil {
 				return err
 			}
 
-			if err = strategy.RelayPacketsOrderedChan(c[src], c[dst], sp, sh); err != nil {
-				return err
-			}
-
-			return nil
+			return strategy.RelayPacketsOrderedChan(c[src], c[dst], sp, sh)
 		},
 	}
 
