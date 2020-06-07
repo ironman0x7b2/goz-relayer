@@ -43,17 +43,25 @@ func xfersend() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			
-			done := c[dst].UseSDKContext() 
+
+			count, err := cmd.Flags().GetUint64("count")
+			if err != nil {
+				return err
+			}
+
+			done := c[dst].UseSDKContext()
 			dstAddr, err := sdk.AccAddressFromBech32(args[4])
 			if err != nil {
 				return err
 			}
-			done ()
-			
-			return c[src].SendTransferMsg(c[dst], amount, dstAddr, source)
+			done()
+
+			return c[src].SendTransferMsg(c[dst], amount, dstAddr, source, count)
 		},
 	}
+
+	cmd.Flags().Uint64("count", 250, "Number of messages in a tx")
+
 	return pathFlag(cmd)
 }
 

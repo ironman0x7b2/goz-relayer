@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	retry "github.com/avast/retry-go"
+	"github.com/avast/retry-go"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	chanTypes "github.com/cosmos/cosmos-sdk/x/ibc/04-channel/types"
 	tmclient "github.com/cosmos/cosmos-sdk/x/ibc/07-tendermint/types"
@@ -140,7 +140,7 @@ func (src *Chain) SendTransferBothSides(dst *Chain, amount sdk.Coin, dstAddr sdk
 }
 
 // SendTransferMsg initiates an ibs20 transfer from src to dst with the specified args
-func (src *Chain) SendTransferMsg(dst *Chain, amount sdk.Coin, dstAddr sdk.AccAddress, source bool) error {
+func (src *Chain) SendTransferMsg(dst *Chain, amount sdk.Coin, dstAddr sdk.AccAddress, source bool, count uint64) error {
 	if source {
 		amount.Denom = fmt.Sprintf("%s/%s/%s", dst.PathEnd.PortID, dst.PathEnd.ChannelID, amount.Denom)
 	} else {
@@ -159,10 +159,19 @@ func (src *Chain) SendTransferMsg(dst *Chain, amount sdk.Coin, dstAddr sdk.AccAd
 
 	// MsgTransfer will call SendPacket on src chain
 	txs := RelayMsgs{
-		Src: []sdk.Msg{src.PathEnd.MsgTransfer(
-			dst.PathEnd, dstHeader.GetHeight(), sdk.NewCoins(amount), dstAddrString, src.MustGetAddress(),
-		)},
+		Src: []sdk.Msg{},
 		Dst: []sdk.Msg{},
+	}
+	message := src.PathEnd.MsgTransfer(
+		dst.PathEnd,
+		dstHeader.GetHeight(),
+		sdk.NewCoins(amount),
+		dstAddrString,
+		src.MustGetAddress(),
+	)
+
+	for ; count > 0; count-- {
+		txs.Src = append(txs.Src, message)
 	}
 
 	if txs.Send(src, dst); !txs.success {
