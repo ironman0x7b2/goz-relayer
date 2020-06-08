@@ -216,8 +216,6 @@ func (nrs *NaiveStrategy) RelayPacketsOrderedChan(src, dst *Chain, sp *RelaySequ
 	messages.Dst = append(messages.Dst, dstMessages...)
 
 	if !messages.Ready() {
-		src.Log(fmt.Sprintf("- No packets to relay between [%s]port{%s} and [%s]port{%s}",
-			src.ChainID, src.PathEnd.PortID, dst.ChainID, dst.PathEnd.PortID))
 		return nil
 	}
 
