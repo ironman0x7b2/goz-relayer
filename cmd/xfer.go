@@ -60,7 +60,7 @@ func xfersend() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().Uint64("count", 250, "Number of messages in a tx")
+	cmd.Flags().Uint64("count", 250, "number of messages in a tx")
 
 	return pathFlag(cmd)
 }

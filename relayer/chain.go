@@ -213,10 +213,6 @@ func (src *Chain) SendMsg(datagram sdk.Msg) (sdk.TxResponse, error) {
 func (src *Chain) SendMsgs(datagrams []sdk.Msg) (res sdk.TxResponse, err error) {
 	var out []byte
 	if out, err = src.BuildAndSignTx(datagrams); err != nil {
-		if src.increase != nil {
-			src.increase <- false
-		}
-
 		return res, err
 	}
 	return src.BroadcastTxCommit(out)
@@ -258,7 +254,8 @@ func (src *Chain) BroadcastTxCommit(txBytes []byte) (sdk.TxResponse, error) {
 		src.increase <- true
 	}
 
-	return sdkCtx.CLIContext{Client: src.Client}.BroadcastTxCommit(txBytes)
+	res, _ := sdkCtx.CLIContext{Client: src.Client}.BroadcastTxCommit(txBytes)
+	return res, nil
 }
 
 // Log takes a string and logs the data

@@ -259,7 +259,8 @@ func multiRelayMsgsCmd() *cobra.Command {
 			}
 
 			increase := make(chan bool)
-			src := config.Chains.MustGet(args[0])
+			src := config.Chains.MustGet(args[0]).
+				WithIncreaseSequenceChan(increase)
 			dst := config.Chains.MustGet(args[1]).
 				WithIncreaseSequenceChan(increase)
 
@@ -340,7 +341,7 @@ func multiRelayMsgsCmd() *cobra.Command {
 
 					log.Print("[WAI] (increase)\n")
 					if <-increase {
-						sequence++
+						sequence = sequence + 1
 						dst.WithSequence(sequence)
 					}
 				}
@@ -355,7 +356,7 @@ func multiRelayMsgsCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().Uint64("limit", 1, "Max number of runs")
+	cmd.Flags().Uint64("limit", 1, "number of runs")
 
 	return strategyFlag(cmd)
 }

@@ -2,6 +2,7 @@ package relayer
 
 import (
 	"fmt"
+	"github.com/avast/retry-go"
 	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -99,15 +100,32 @@ func (r *RelayMsgs) Send(src, dst *Chain) {
 // Submits the messages to the provided chain and logs the result of the transaction.
 // Returns true upon success and false otherwise.
 func send(chain *Chain, msgs []sdk.Msg) bool {
-	res, err := chain.SendMsgs(msgs)
-	if err != nil || res.Code != 0 {
-		chain.LogFailedTx(res, err, msgs)
-		return false
-	} else {
-		// NOTE: Add more data to this such as identifiers
-		chain.LogSuccessTx(res, msgs)
+	err := retry.Do(func() error {
+		res, err := chain.SendMsgs(msgs)
+
+		if err != nil {
+			chain.LogFailedTx(res, err, msgs)
+			if strings.Contains(err.Error(), "request body too large") {
+				msgs = msgs[:len(msgs)-5]
+			}
+
+			return err
+		}
+
+		if res.Code == 0 {
+			chain.LogSuccessTx(res, msgs)
+		} else {
+			chain.LogFailedTx(res, err, msgs)
+		}
+
+		return nil
+	}, retry.DelayType(retry.FixedDelay), retry.Attempts(5))
+
+	if err != nil && chain.increase != nil {
+		chain.increase <- false
 	}
-	return true
+
+	return err == nil
 }
 
 func getMsgAction(msgs []sdk.Msg) string {

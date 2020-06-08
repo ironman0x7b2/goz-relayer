@@ -230,15 +230,7 @@ func (nrs *NaiveStrategy) RelayPacketsOrderedChan(src, dst *Chain, sp *RelaySequ
 		}, messages.Dst...)
 	}
 
-	if messages.Send(src, dst); messages.success {
-		if len(messages.Src) > 1 {
-			src.logPacketsRelayed(dst, len(messages.Src)-1)
-		}
-		if len(messages.Dst) > 1 {
-			dst.logPacketsRelayed(src, len(messages.Dst)-1)
-		}
-	}
-
+	messages.Send(src, dst)
 	return nil
 }
 
