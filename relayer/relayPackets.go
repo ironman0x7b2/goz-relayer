@@ -56,7 +56,7 @@ func (rp *relayMsgTimeout) FetchCommitResponse(src, dst *Chain, sh *SyncHeaders)
 			return fmt.Errorf("- [%s]@{%d} - Packet Commitment Proof is nil seq(%d)", dst.ChainID, int64(sh.GetHeight(dst.ChainID)-1), rp.seq)
 		}
 		return nil
-	}); err != nil {
+	}, retry.DelayType(retry.FixedDelay), retry.Attempts(5)); err != nil {
 		dst.Error(err)
 		return
 	}
@@ -130,7 +130,7 @@ func (rp *relayMsgRecvPacket) FetchCommitResponse(src, dst *Chain, sh *SyncHeade
 			return fmt.Errorf("- [%s]@{%d} - Packet Commitment Proof is nil seq(%d)", dst.ChainID, int64(sh.GetHeight(dst.ChainID)-1), rp.seq)
 		}
 		return nil
-	}); err != nil {
+	}, retry.DelayType(retry.FixedDelay), retry.Attempts(5)); err != nil {
 		dst.Error(err)
 		return
 	}
@@ -199,7 +199,7 @@ func (rp *relayMsgPacketAck) FetchCommitResponse(src, dst *Chain, sh *SyncHeader
 			return fmt.Errorf("- [%s]@{%d} - Packet Ack Proof is nil seq(%d)", dst.ChainID, int64(sh.GetHeight(dst.ChainID)-1), rp.seq)
 		}
 		return nil
-	}); err != nil {
+	}, retry.DelayType(retry.FixedDelay), retry.Attempts(5)); err != nil {
 		dst.Error(err)
 		return
 	}
