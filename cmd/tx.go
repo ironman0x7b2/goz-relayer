@@ -17,11 +17,13 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
-
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/iqlusioninc/relayer/relayer"
 	"github.com/spf13/cobra"
+	"log"
+	"strings"
+	"sync"
+	"time"
 )
 
 // transactionCmd represents the tx command
@@ -47,6 +49,7 @@ func transactionCmd() *cobra.Command {
 		flags.LineBreak,
 		rawTransactionCmd(),
 		sendPacketCmd(),
+		multiRelayMsgsCmd(),
 	)
 
 	return cmd
@@ -223,6 +226,136 @@ func relayMsgsCmd() *cobra.Command {
 			return strategy.RelayPacketsOrderedChan(c[src], c[dst], sp, sh)
 		},
 	}
+
+	return strategyFlag(cmd)
+}
+
+func multiRelayMsgsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:  "multi-relay [src] [dst] [path-names]",
+		Args: cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			limit, err := cmd.Flags().GetUint64("limit")
+			if err != nil {
+				return err
+			}
+
+			paths := make(relayer.Paths)
+			for _, name := range strings.Split(args[2], ",") {
+				paths[name] = config.Paths.MustGet(name)
+			}
+
+			maxPacketLength, err := cmd.Flags().GetUint64(flagMaxMsgLength)
+			if err != nil {
+				return err
+			}
+
+			maxPacketLength = maxPacketLength - 1
+
+			for name, path := range paths {
+				if path.Src.ChainID != args[0] || path.Dst.ChainID != args[1] {
+					return fmt.Errorf("source or destination chain id does not match in provided path %s", name)
+				}
+			}
+
+			increase := make(chan bool)
+			src := config.Chains.MustGet(args[0])
+			dst := config.Chains.MustGet(args[1]).
+				WithIncreaseSequenceChan(increase)
+
+			for ; limit > 0; limit-- {
+				start := time.Now()
+				log.Printf("[INI] {%s}\n", start)
+
+				account, err := dst.GetAccount()
+				if err != nil {
+					return err
+				}
+
+				sequence := account.GetSequence()
+				dst.WithAccountNumber(account.GetAccountNumber()).
+					WithSequence(sequence)
+
+				var wg sync.WaitGroup
+				for name, path := range paths {
+					wg.Add(1)
+					go func(name string) {
+						log.Printf("[STA] {%s | %d}\n", name, sequence)
+
+						var (
+							headers  *relayer.SyncHeaders
+							relay    *relayer.RelaySequences
+							strategy relayer.Strategy
+							err      error
+						)
+
+						defer func() {
+							if err != nil {
+								log.Printf("[ERR] {%s} (%s)\n", name, err)
+								increase <- false
+							}
+
+							log.Printf("[END] {%s}\n", name)
+							wg.Done()
+						}()
+
+						if err = src.SetPath(path.Src); err != nil {
+							return
+						}
+						if err = dst.SetPath(path.Dst); err != nil {
+							return
+						}
+
+						headers, err = relayer.NewSyncHeaders(src, dst)
+						if err != nil {
+							return
+						}
+
+						relay, err = relayer.UnrelayedSequences(src, dst, headers)
+						if err != nil {
+							return
+						}
+
+						log.Printf("[NOP] {%d | %d}", len(relay.Src), len(relay.Dst))
+
+						if len(relay.Src) > int(maxPacketLength) {
+							relay.Src = relay.Src[:maxPacketLength]
+						}
+						if len(relay.Dst) > int(maxPacketLength) {
+							relay.Dst = relay.Dst[:maxPacketLength]
+						}
+
+						if len(relay.Src) == 0 && len(relay.Dst) == 0 {
+							err = fmt.Errorf("no packets to relay")
+							return
+						}
+
+						strategy, err = GetStrategyWithOptions(cmd, path.MustGetStrategy())
+						if err != nil {
+							return
+						}
+
+						err = strategy.RelayPacketsOrderedChan(src, dst, relay, headers)
+					}(name)
+
+					log.Print("[WAI] (increase)\n")
+					if <-increase {
+						sequence++
+						dst.WithSequence(sequence)
+					}
+				}
+
+				log.Printf("[WAI] (work group)\n")
+				wg.Wait()
+
+				log.Printf("[DON] {%s}\n", time.Since(start))
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().Uint64("limit", 1, "Max number of runs")
 
 	return strategyFlag(cmd)
 }

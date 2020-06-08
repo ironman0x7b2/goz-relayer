@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/cosmos/cosmos-sdk/x/auth/exported"
 	"net/url"
 	"os"
 	"path"
@@ -53,6 +54,10 @@ type Chain struct {
 	logger  log.Logger
 	timeout time.Duration
 	debug   bool
+
+	accountNumber uint64
+	sequence      uint64
+	increase      chan bool
 
 	// stores facuet addresses that have been used reciently
 	faucetAddrs map[string]time.Time
@@ -208,37 +213,51 @@ func (src *Chain) SendMsg(datagram sdk.Msg) (sdk.TxResponse, error) {
 func (src *Chain) SendMsgs(datagrams []sdk.Msg) (res sdk.TxResponse, err error) {
 	var out []byte
 	if out, err = src.BuildAndSignTx(datagrams); err != nil {
+		if src.increase != nil {
+			src.increase <- false
+		}
+
 		return res, err
 	}
 	return src.BroadcastTxCommit(out)
 }
 
 // BuildAndSignTx takes messages and builds, signs and marshals a sdk.Tx to prepare it for broadcast
-func (src *Chain) BuildAndSignTx(msgs []sdk.Msg) ([]byte, error) {
+func (src *Chain) BuildAndSignTx(msgs []sdk.Msg) (res []byte, err error) {
 	done := src.UseSDKContext()
 	defer done()
 
-	// Fetch account and sequence numbers for the account
-	acc, err := auth.NewAccountRetriever(src.Cdc, src).GetAccount(src.MustGetAddress())
-	if err != nil {
-		return nil, err
+	if src.increase == nil {
+		account, err := src.GetAccount()
+		if err != nil {
+			return nil, err
+		}
+
+		src.WithAccountNumber(account.GetAccountNumber()).
+			WithSequence(account.GetSequence())
 	}
-	ctx := sdkCtx.CLIContext{Client: src.Client}
+
 	txBldr := auth.NewTxBuilder(
-		auth.DefaultTxEncoder(src.Amino.Codec), acc.GetAccountNumber(),
-		acc.GetSequence(), src.Gas, src.GasAdjustment, true, src.ChainID,
+		auth.DefaultTxEncoder(src.Amino.Codec), src.accountNumber,
+		src.sequence, src.Gas, src.GasAdjustment, true, src.ChainID,
 		src.Memo, sdk.NewCoins(), src.getGasPrices()).WithKeybase(src.Keybase)
+
 	if src.GasAdjustment > 0 {
-		txBldr, err = authclient.EnrichWithGas(txBldr, ctx, msgs)
+		txBldr, err = authclient.EnrichWithGas(txBldr, sdkCtx.CLIContext{Client: src.Client}, msgs)
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	return txBldr.BuildAndSign(src.Key, ckeys.DefaultKeyPass, msgs)
 }
 
 // BroadcastTxCommit takes the marshaled transaction bytes and broadcasts them
 func (src *Chain) BroadcastTxCommit(txBytes []byte) (sdk.TxResponse, error) {
+	if src.increase != nil {
+		src.increase <- true
+	}
+
 	return sdkCtx.CLIContext{Client: src.Client}.BroadcastTxCommit(txBytes)
 }
 
@@ -301,6 +320,30 @@ func (src *Chain) MustGetAddress() sdk.AccAddress {
 		panic(err)
 	}
 	return srcAddr
+}
+
+func (src *Chain) GetAccount() (exported.Account, error) {
+	account, err := auth.NewAccountRetriever(src.Cdc, src).GetAccount(src.MustGetAddress())
+	if err != nil {
+		return nil, err
+	}
+
+	return account, nil
+}
+
+func (src *Chain) WithAccountNumber(value uint64) *Chain {
+	src.accountNumber = value
+	return src
+}
+
+func (src *Chain) WithSequence(value uint64) *Chain {
+	src.sequence = value
+	return src
+}
+
+func (src *Chain) WithIncreaseSequenceChan(c chan bool) *Chain {
+	src.increase = c
+	return src
 }
 
 var sdkContextMutex sync.Mutex
